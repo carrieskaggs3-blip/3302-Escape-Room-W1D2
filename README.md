@@ -1,4 +1,4 @@
-# NUT 3302 Week 1 Day 2 Streamlit Escape Room + Faculty Dashboard
+# NUR 3302 Week 1 Day 2 Streamlit Escape Room + Faculty Dashboard
 
 This package contains the student escape room and a password-protected faculty dashboard in the same Streamlit app.
 
