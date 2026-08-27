@@ -486,7 +486,7 @@ st.title("NUT 3302: Nutrition Standards Escape Room")
 st.subheader("Week 1 • Day 2 | Nutrition Standards and Guidelines")
 st.write(
     "A nutrition reference system has been scrambled. Your job is to restore the standards, "
-    "solve each clinical lock, collect five letters, and use them to escape."
+    "solve each clinical lock, collect seven letters, and use them to escape."
 )
 
 if not st.session_state.started:
@@ -1071,7 +1071,7 @@ elif st.session_state.current_room == 7 and not st.session_state.finished:
     st.header("Final Escape: Rebuild the Key")
     st.caption("Difficulty: Final synthesis")
     st.write("You collected seven letters:")
-    cols = st.columns(5)
+    cols = st.columns(7)
     for i, letter in enumerate(st.session_state.letters):
         with cols[i]:
             st.markdown(f'<div class="letter-box">{letter}</div>', unsafe_allow_html=True)
