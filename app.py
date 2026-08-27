@@ -49,9 +49,11 @@ ROOMS = [
     "Room 3: The Label Lab",
     "Room 4: The AMDR Vault",
     "Room 5: The Clinical Decision Room",
+    "Room 6: The Food Choice Challenge",
+    "Room 7: The Final Patient",
 ]
-LETTERS = ["G", "U", "I", "D", "E"]
-FINAL_WORD = "GUIDE"
+LETTERS = ["B", "A", "L", "A", "N", "C", "E"]
+FINAL_WORD = "BALANCE"
 
 HINT_POINT_PENALTY = 5
 HINT_TIME_PENALTY_SECONDS = 120
@@ -81,9 +83,9 @@ defaults = {
     "current_room": 0,
     "room_start_times": {},
     "room_finish_times": {},
-    "room_attempts": {i: 0 for i in range(5)},
-    "room_hints": {i: 0 for i in range(5)},
-    "room_complete": {i: False for i in range(5)},
+    "room_attempts": {i: 0 for i in range(7)},
+    "room_hints": {i: 0 for i in range(7)},
+    "room_complete": {i: False for i in range(7)},
     "letters": [],
     "final_attempts": 0,
     "final_hint_used": False,
@@ -115,13 +117,13 @@ def complete_room(idx):
         st.session_state.room_complete[idx] = True
         st.session_state.room_finish_times[idx] = now()
         st.session_state.letters.append(LETTERS[idx])
-    if idx < 4:
+    if idx < 6:
         st.session_state.current_room = idx + 1
         start_room(idx + 1)
     else:
         if st.session_state.final_start_time is None:
             st.session_state.final_start_time = now()
-        st.session_state.current_room = 5
+        st.session_state.current_room = 7
     st.rerun()
 
 def register_wrong(idx):
@@ -177,7 +179,7 @@ def calculate_score():
 
 def show_progress():
     completed = sum(1 for v in st.session_state.room_complete.values() if v)
-    st.progress(completed / 5, text=f"{completed} of 5 rooms unlocked")
+    st.progress(completed / 7, text=f"{completed} of 7 rooms unlocked")
     if st.session_state.letters:
         st.caption("Letters collected: " + "  ".join(st.session_state.letters))
 
@@ -249,9 +251,9 @@ def build_result_record():
         int(adjusted_total_seconds()),
         total_hint_count(),
         total_wrong_attempts(),
-        *[int(room_elapsed(i)) for i in range(5)],
-        *[st.session_state.room_attempts[i] for i in range(5)],
-        *[st.session_state.room_hints[i] for i in range(5)],
+        *[int(room_elapsed(i)) for i in range(7)],
+        *[st.session_state.room_attempts[i] for i in range(7)],
+        *[st.session_state.room_hints[i] for i in range(7)],
         st.session_state.final_attempts,
         int(st.session_state.final_hint_used),
     ]
@@ -864,20 +866,218 @@ elif st.session_state.current_room == 4:
             st.error("The patient plan still mixes standards. Match each question to the tool designed to answer it.")
     st.markdown('</div>', unsafe_allow_html=True)
 
+
+# -----------------------------
+# ROOM 6
+# -----------------------------
+elif st.session_state.current_room == 5:
+    idx = 5
+    st.header(ROOMS[idx])
+    st.caption("Difficulty: Difficult • Week 1 Day 1 Review")
+    st.markdown('<div class="room-card">', unsafe_allow_html=True)
+    st.write(
+        "A campus café has asked you to help students make sense of food choices. "
+        "Use nutrient density, energy density, and the factors that influence why people eat."
+    )
+
+    q1 = st.radio(
+        "1. Which statement best describes a nutrient-dense food?",
+        [
+            "It always contains fewer than 100 calories.",
+            "It provides meaningful nutrients relative to the calories it contains.",
+            "It contains no fat or added sugar.",
+            "It must be a fruit or vegetable."
+        ],
+        index=None, key="r6q1"
+    )
+    q2 = st.radio(
+        "2. Which food can be energy dense and still contribute valuable nutrients?",
+        [
+            "Almonds",
+            "Diet soda",
+            "Hard candy",
+            "Ice pop"
+        ],
+        index=None, key="r6q2"
+    )
+    q3 = st.radio(
+        "3. A student is not physically hungry but buys pizza because everyone in the study group is eating. "
+        "What is the strongest influence on this food choice?",
+        [
+            "Physiologic hunger",
+            "Social influence",
+            "Nutrient deficiency",
+            "Energy requirement"
+        ],
+        index=None, key="r6q3"
+    )
+    q4 = st.radio(
+        "4. A student chooses the only food option still available after a late lab. "
+        "Which factor most directly influenced the choice?",
+        [
+            "Environment and availability",
+            "Physiologic hunger only",
+            "Cultural tradition only",
+            "Daily Value"
+        ],
+        index=None, key="r6q4"
+    )
+    q5 = st.radio(
+        "5. Which statement about energy-dense foods is most accurate?",
+        [
+            "Energy-dense foods are automatically unhealthy.",
+            "Energy density tells you how many vitamins a food contains.",
+            "Energy-dense foods provide more calories relative to their weight or amount, but nutrient quality still matters.",
+            "Only foods high in fat are energy dense."
+        ],
+        index=None, key="r6q5"
+    )
+
+    if st.session_state.room_hints[idx] == 0:
+        hint_button(
+            idx,
+            "Do not equate calories with quality. Think about nutrients relative to calories, and remember that food choices are shaped by biology, personal factors, resources, and environment."
+        )
+    else:
+        st.warning(
+            "Hint used: Nutrient density describes nutrients relative to calories. Nuts can be energy dense and nutrient rich. "
+            "Eating because others are eating is social. Limited choices point to environment/availability."
+        )
+
+    if st.button("Unlock Room 6", type="primary"):
+        correct = (
+            q1 == "It provides meaningful nutrients relative to the calories it contains." and
+            q2 == "Almonds" and
+            q3 == "Social influence" and
+            q4 == "Environment and availability" and
+            q5 == "Energy-dense foods provide more calories relative to their weight or amount, but nutrient quality still matters."
+        )
+        if correct:
+            success_letter(idx)
+            time.sleep(1.2)
+            complete_room(idx)
+        else:
+            register_wrong(idx)
+            st.error("The café lock is still closed. Recheck nutrient density, energy density, and what is driving each food choice.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------
+# ROOM 7
+# -----------------------------
+elif st.session_state.current_room == 6:
+    idx = 6
+    st.header(ROOMS[idx])
+    st.caption("Difficulty: Most Difficult • Unfolding Case Study")
+    st.markdown('<div class="room-card">', unsafe_allow_html=True)
+    st.write(
+        "Final case: Maya is a 20-year-old college student. She reports skipping breakfast because she is rushed, "
+        "buying whatever is closest between classes, and eating with friends late at night even when she is not hungry."
+    )
+
+    stage1 = st.radio(
+        "Stage 1. Which assessment finding best shows an environmental influence on Maya's intake?",
+        [
+            "She feels hungry before lunch.",
+            "She buys whatever food is closest between classes.",
+            "She enjoys eating foods she grew up with.",
+            "She reports liking sweet foods."
+        ],
+        index=None, key="r7stage1"
+    )
+
+    st.info(
+        "New information: At lunch Maya chooses a snack bar with 12 g protein. "
+        "Protein provides 4 kcal per gram. The label lists protein as 24% DV."
+    )
+
+    protein_kcal = st.number_input(
+        "Stage 2. How many calories in the bar come from protein?",
+        min_value=0, max_value=300, step=1, key="r7protein"
+    )
+    stage2b = st.radio(
+        "How should the protein content be described using %DV?",
+        [
+            "Low",
+            "Good source",
+            "High/excellent source",
+            "Cannot be determined"
+        ],
+        index=None, key="r7stage2b"
+    )
+
+    st.info(
+        "New information: Maya asks whether the %DV on the package is the same thing as her individualized nutrient goal."
+    )
+    stage3 = st.radio(
+        "Stage 3. What is the best nursing response?",
+        [
+            "%DV is your individualized intake goal.",
+            "Use the RDA or AI when an individual intake goal is needed; %DV is useful for comparing packaged foods.",
+            "Use the UL as your daily target.",
+            "Use the EAR as the individual goal for every nutrient."
+        ],
+        index=None, key="r7stage3"
+    )
+
+    st.info(
+        "Final information: Maya wants one realistic change. Her usual afternoon choice is candy and a sweetened drink. "
+        "She has access to Greek yogurt, fruit, nuts, water, and sandwiches on campus."
+    )
+    stage4 = st.radio(
+        "Stage 4. Which recommendation best applies the concepts from both class days?",
+        [
+            "Choose the item with the fewest calories every time.",
+            "Avoid all energy-dense foods.",
+            "Choose a nutrient-dense option such as Greek yogurt with fruit and water, while considering convenience and what she will realistically eat.",
+            "Use the Daily Value as the only guide for all food decisions."
+        ],
+        index=None, key="r7stage4"
+    )
+
+    if st.session_state.room_hints[idx] == 0:
+        hint_button(
+            idx,
+            "Work through the case in sequence: identify the influence on intake, calculate protein energy, interpret %DV, "
+            "choose the correct nutrition standard, then make a realistic nutrient-dense recommendation."
+        )
+    else:
+        st.warning(
+            "Hint used: Closest available food = environment. 12 g protein × 4 kcal/g = 48 kcal. "
+            "24% DV is high. RDA/AI supports an individual goal; %DV compares labels. "
+            "The best teaching choice balances nutrient density with the student's real environment."
+        )
+
+    if st.button("Unlock Room 7", type="primary"):
+        correct = (
+            stage1 == "She buys whatever food is closest between classes." and
+            protein_kcal == 48 and
+            stage2b == "High/excellent source" and
+            stage3 == "Use the RDA or AI when an individual intake goal is needed; %DV is useful for comparing packaged foods." and
+            stage4 == "Choose a nutrient-dense option such as Greek yogurt with fruit and water, while considering convenience and what she will realistically eat."
+        )
+        if correct:
+            success_letter(idx)
+            time.sleep(1.2)
+            complete_room(idx)
+        else:
+            register_wrong(idx)
+            st.error("The final patient lock is still closed. Follow the case from assessment through calculation, label interpretation, and teaching.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # -----------------------------
 # FINAL ESCAPE
 # -----------------------------
-elif st.session_state.current_room == 5 and not st.session_state.finished:
+elif st.session_state.current_room == 7 and not st.session_state.finished:
     st.header("Final Escape: Rebuild the Key")
     st.caption("Difficulty: Final synthesis")
-    st.write("You collected five letters:")
+    st.write("You collected seven letters:")
     cols = st.columns(5)
     for i, letter in enumerate(st.session_state.letters):
         with cols[i]:
             st.markdown(f'<div class="letter-box">{letter}</div>', unsafe_allow_html=True)
 
     st.write(
-        "Rearrange the letters to form a word that describes what nutrition standards and evidence do for clinical decision-making."
+        "Rearrange the seven letters to form a word that captures a central idea in nutrition: meeting needs while considering quality, energy, and the whole eating pattern."
     )
 
     final_word = st.text_input("Final escape word", max_chars=10).strip().upper()
@@ -885,9 +1085,9 @@ elif st.session_state.current_room == 5 and not st.session_state.finished:
     if not st.session_state.final_hint_used:
         if st.button("Use final hint (5 points + 2 minutes)"):
             st.session_state.final_hint_used = True
-            st.warning("Hint: Standards do not replace nursing judgment. They help _____ it.")
+            st.warning("Hint: Nutrition is not about one perfect food or one number. Think about the overall _____.")
     else:
-        st.warning("Hint used: Standards do not replace nursing judgment. They help GUIDE it.")
+        st.warning("Hint used: Think about the word used when nutrients, energy, food quality, and the overall eating pattern work together: BALANCE.")
 
     if st.button("ESCAPE", type="primary", use_container_width=True):
         if final_word == FINAL_WORD:
@@ -897,7 +1097,7 @@ elif st.session_state.current_room == 5 and not st.session_state.finished:
             st.rerun()
         else:
             st.session_state.final_attempts += 1
-            st.error("The final word is not correct. Use all five letters.")
+            st.error("The final word is not correct. Use all seven letters.")
 
 # -----------------------------
 # RESULTS
