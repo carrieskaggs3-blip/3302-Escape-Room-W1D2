@@ -62,10 +62,14 @@ RESULTS_SHEET_NAME = "Results"
 RESULT_HEADERS = [
     "submission_id", "timestamp", "mode", "student_names", "section", "team_name",
     "score", "accuracy_score", "efficiency_score", "actual_seconds", "adjusted_seconds",
-    "hints", "wrong_attempts", "room1_seconds", "room2_seconds", "room3_seconds",
-    "room4_seconds", "room5_seconds", "room1_attempts", "room2_attempts", "room3_attempts",
-    "room4_attempts", "room5_attempts", "room1_hints", "room2_hints", "room3_hints",
-    "room4_hints", "room5_hints", "final_attempts", "final_hint_used"
+    "hints", "wrong_attempts",
+    "room1_seconds", "room2_seconds", "room3_seconds", "room4_seconds", "room5_seconds",
+    "room6_seconds", "room7_seconds",
+    "room1_attempts", "room2_attempts", "room3_attempts", "room4_attempts", "room5_attempts",
+    "room6_attempts", "room7_attempts",
+    "room1_hints", "room2_hints", "room3_hints", "room4_hints", "room5_hints",
+    "room6_hints", "room7_hints",
+    "final_attempts", "final_hint_used"
 ]
 
 # -----------------------------
@@ -200,15 +204,94 @@ def eastern_now_iso():
 
 
 def google_backend_configured():
+    """Return True only when the required Streamlit Secrets exist."""
     try:
-        return "google_service_account" in st.secrets and "spreadsheet_id" in st.secrets
+        return (
+            "google_service_account" in st.secrets
+            and "spreadsheet_id" in st.secrets
+            and bool(str(st.secrets["spreadsheet_id"]).strip())
+        )
     except Exception:
         return False
 
 
+def _clean_secret(value):
+    """Convert Streamlit secret values to plain strings safely."""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def get_service_account_info():
+    """
+    Build a minimal Google service-account dictionary from Streamlit Secrets.
+
+    This avoids passing Streamlit's AttrDict directly to google-auth and also
+    converts literal \\n sequences in the private key to real newlines.
+    """
+    if "google_service_account" not in st.secrets:
+        raise RuntimeError(
+            "Missing [google_service_account] in Streamlit Secrets."
+        )
+
+    raw = st.secrets["google_service_account"]
+
+    # Streamlit sections behave like mappings, but convert values explicitly.
+    try:
+        get_value = raw.get
+    except AttributeError:
+        raise RuntimeError(
+            "The [google_service_account] section in Streamlit Secrets is not formatted correctly."
+        )
+
+    private_key = _clean_secret(get_value("private_key", ""))
+    # Handles either literal backslash-n from a copied JSON key or real TOML newlines.
+    private_key = private_key.replace("\\\\n", "\n")
+
+    info = {
+        "type": "service_account",
+        "project_id": _clean_secret(get_value("project_id", "")),
+        "private_key_id": _clean_secret(get_value("private_key_id", "")),
+        "private_key": private_key,
+        "client_email": _clean_secret(get_value("client_email", "")),
+        "client_id": _clean_secret(get_value("client_id", "")),
+        "token_uri": _clean_secret(
+            get_value("token_uri", "https://oauth2.googleapis.com/token")
+        ) or "https://oauth2.googleapis.com/token",
+    }
+
+    required = ["project_id", "private_key", "client_email", "token_uri"]
+    missing = [field for field in required if not info[field]]
+    if missing:
+        raise RuntimeError(
+            "Missing required Google secret value(s): " + ", ".join(missing)
+        )
+
+    # Catch common placeholder values before google-auth produces a cryptic error.
+    placeholder_markers = ("YOUR ", "PASTE-", "YOUR-", "ABC123", "1ABCxyz")
+    for field, value in info.items():
+        if isinstance(value, str) and any(marker in value for marker in placeholder_markers):
+            raise RuntimeError(
+                f"The Google secret `{field}` still contains a placeholder value."
+            )
+
+    if not info["private_key"].startswith("-----BEGIN PRIVATE KEY-----"):
+        raise RuntimeError(
+            "The Google private_key is not formatted correctly. "
+            "It must begin with -----BEGIN PRIVATE KEY-----."
+        )
+    if "-----END PRIVATE KEY-----" not in info["private_key"]:
+        raise RuntimeError(
+            "The Google private_key is incomplete. "
+            "It must include -----END PRIVATE KEY-----."
+        )
+
+    return info
+
+
 @st.cache_resource(show_spinner=False)
 def get_google_client():
-    info = dict(st.secrets["google_service_account"])
+    info = get_service_account_info()
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
@@ -219,19 +302,45 @@ def get_google_client():
 
 def get_results_worksheet():
     if not google_backend_configured():
-        raise RuntimeError("Google Sheets storage is not configured.")
+        raise RuntimeError(
+            "Google Sheets storage is not configured. "
+            "Add `spreadsheet_id` and `[google_service_account]` to Streamlit Secrets."
+        )
+
+    spreadsheet_id = _clean_secret(st.secrets["spreadsheet_id"])
+    if not spreadsheet_id:
+        raise RuntimeError("The Streamlit secret `spreadsheet_id` is blank.")
+
     client = get_google_client()
-    spreadsheet = client.open_by_key(st.secrets["spreadsheet_id"])
+
+    try:
+        spreadsheet = client.open_by_key(spreadsheet_id)
+    except gspread.SpreadsheetNotFound as exc:
+        raise RuntimeError(
+            "Google could not open the spreadsheet. Check that `spreadsheet_id` is the ID "
+            "between /d/ and /edit in the Google Sheet URL and that the Sheet is shared "
+            "with the service-account email as Editor."
+        ) from exc
+    except gspread.APIError as exc:
+        raise RuntimeError(
+            f"Google Sheets API error while opening the spreadsheet: {exc}"
+        ) from exc
+
     try:
         ws = spreadsheet.worksheet(RESULTS_SHEET_NAME)
     except gspread.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=RESULTS_SHEET_NAME, rows=1000, cols=len(RESULT_HEADERS) + 2)
+        ws = spreadsheet.add_worksheet(
+            title=RESULTS_SHEET_NAME,
+            rows=1000,
+            cols=max(len(RESULT_HEADERS) + 2, 40),
+        )
+
     first_row = ws.row_values(1)
+
+    # Keep the header synchronized with the current 7-room app.
     if first_row != RESULT_HEADERS:
-        if not first_row:
-            ws.append_row(RESULT_HEADERS, value_input_option="RAW")
-        else:
-            ws.update(values=[RESULT_HEADERS], range_name="A1")
+        ws.update(range_name="A1", values=[RESULT_HEADERS])
+
     return ws
 
 
@@ -292,10 +401,14 @@ def load_results_from_sheet():
             df[col] = ""
     numeric_cols = [
         "score", "accuracy_score", "efficiency_score", "actual_seconds", "adjusted_seconds",
-        "hints", "wrong_attempts", "room1_seconds", "room2_seconds", "room3_seconds",
-        "room4_seconds", "room5_seconds", "room1_attempts", "room2_attempts", "room3_attempts",
-        "room4_attempts", "room5_attempts", "room1_hints", "room2_hints", "room3_hints",
-        "room4_hints", "room5_hints", "final_attempts", "final_hint_used"
+        "hints", "wrong_attempts",
+        "room1_seconds", "room2_seconds", "room3_seconds", "room4_seconds", "room5_seconds",
+        "room6_seconds", "room7_seconds",
+        "room1_attempts", "room2_attempts", "room3_attempts", "room4_attempts", "room5_attempts",
+        "room6_attempts", "room7_attempts",
+        "room1_hints", "room2_hints", "room3_hints", "room4_hints", "room5_hints",
+        "room6_hints", "room7_hints",
+        "final_attempts", "final_hint_used"
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -409,11 +522,13 @@ def dashboard_from_dataframe(df):
 
     with st.expander("Instructor answer key"):
         st.write("Room 1: EAR, RDA/AI, UL, AMDR, EER, %DV")
-        st.write("Room 2: 8 mg, 18 mg, 27 mg; use the DRI that matches age, sex, and life stage")
+        st.write("Room 2: 56 kcal; 28% DV = high/excellent source; 12% DV = good source")
         st.write("Room 3: 10% DV and 20% DV; 20% is high; compare serving size and %DV")
         st.write("Room 4: A fits, B does not fit, C fits, D does not fit")
         st.write("Room 5: RDA/AI, UL, %DV, Dietary Guidelines, then integrate each tool by purpose")
-        st.write("Final word: GUIDE")
+        st.write("Room 6: nutrient density, almonds, social influence, environment/availability, energy density")
+        st.write("Room 7: environment, 48 kcal from protein, 24% DV = high, RDA/AI vs %DV, realistic nutrient-dense choice")
+        st.write("Final word: BALANCE")
 
 
 def render_faculty_dashboard():
@@ -452,6 +567,7 @@ def render_faculty_dashboard():
             dashboard_from_dataframe(df)
         except Exception as exc:
             st.error("I could not load the shared Google Sheet results.")
+            st.caption("The message below identifies the exact Google Sheets or Streamlit Secrets problem.")
             st.code(str(exc))
     else:
         st.warning("Google Sheets storage is not configured. You can still review downloaded CSV results below.")
