@@ -45,7 +45,7 @@ st.markdown("""
 # -----------------------------
 ROOMS = [
     "Room 1: The DRI Archive",
-    "Room 2: The Iron File",
+    "Room 2: The Protein Puzzle",
     "Room 3: The Label Lab",
     "Room 4: The AMDR Vault",
     "Room 5: The Clinical Decision Room",
@@ -588,43 +588,92 @@ elif st.session_state.current_room == 1:
     st.caption("Difficulty: Moderate")
     st.markdown('<div class="room-card">', unsafe_allow_html=True)
     st.write(
-        "A chart of adult iron needs is missing its labels. Restore the values, then decide which reference applies to the patient."
+        "The Protein Puzzle is locked behind a food label. Use the protein information on the label "
+        "to calculate calories from protein, determine % Daily Value, and classify the food correctly."
     )
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        a = st.number_input("Adult man, age 32: iron RDA (mg/day)", min_value=0, max_value=40, step=1, key="r2a")
-    with col2:
-        b = st.number_input("Nonpregnant woman, age 27: iron RDA (mg/day)", min_value=0, max_value=40, step=1, key="r2b")
-    with col3:
-        c = st.number_input("Pregnancy: iron RDA (mg/day)", min_value=0, max_value=40, step=1, key="r2c")
 
-    patient = st.radio(
-        "A 27-year-old nonpregnant patient asks, 'The Nutrition Facts label lists an iron Daily Value of 18 mg. "
-        "Should every adult aim for 18 mg?' Which response is best?",
+    st.markdown("### Mock Nutrition Facts Label")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("Calories", "210")
+    with c2:
+        st.metric("Protein", "14 g")
+    with c3:
+        st.metric("Protein Daily Value", "50 g")
+
+    calories_from_protein = st.number_input(
+        "1. How many calories in one serving come from protein?",
+        min_value=0, max_value=500, step=1, key="r2_calories"
+    )
+
+    protein_pct = st.number_input(
+        "2. Approximately what % Daily Value of protein does one serving provide?",
+        min_value=0, max_value=100, step=1, key="r2_pct"
+    )
+
+    classify_high = st.radio(
+        "3. How should this food be classified based on its protein %DV?",
         [
-            "Yes. The Daily Value is the individual goal for all adults.",
-            "No. Individual nutrient goals use the DRI that matches age, sex, and life stage.",
-            "No. The UL should be used as the daily target instead.",
-            "Yes. Daily Values replace DRIs when a food label is available."
+            "Low in protein",
+            "Good source of protein",
+            "High/excellent source of protein",
+            "Cannot determine from the label"
         ],
         index=None,
-        key="r2patient"
+        key="r2_classify_high"
+    )
+
+    st.markdown("### Second Label Clue")
+    st.write("A second food contains **6 g of protein per serving**. The protein Daily Value is still **50 g**.")
+
+    second_pct = st.number_input(
+        "4. What % Daily Value of protein does the second food provide?",
+        min_value=0, max_value=100, step=1, key="r2_second_pct"
+    )
+
+    classify_good = st.radio(
+        "5. How should the second food be classified?",
+        [
+            "Low in protein",
+            "Good source of protein",
+            "High/excellent source of protein",
+            "Cannot determine from the label"
+        ],
+        index=None,
+        key="r2_classify_good"
     )
 
     if st.session_state.room_hints[idx] == 0:
-        hint_button(idx, "The three numbers in the lecture chart are 8, 18, and 27 mg. Then separate a label reference from an individualized DRI.")
+        hint_button(
+            idx,
+            "Protein provides 4 kcal per gram. For %DV, divide grams per serving by the 50 g Daily Value and multiply by 100. "
+            "Remember: 5% DV or less is low, 10–19% DV is a good source, and 20% DV or more is high."
+        )
     else:
-        st.warning("Hint used: Adult man 19–50 = 8 mg; nonpregnant woman 19–50 = 18 mg; pregnancy = 27 mg. A DV is not automatically an individual's intake goal.")
+        st.warning(
+            "Hint used: 14 g protein × 4 kcal/g = 56 kcal. "
+            "14 ÷ 50 × 100 = 28% DV, which is high. "
+            "6 ÷ 50 × 100 = 12% DV, which is a good source."
+        )
 
     if st.button("Unlock Room 2", type="primary"):
-        correct_patient = "No. Individual nutrient goals use the DRI that matches age, sex, and life stage."
-        if a == 8 and b == 18 and c == 27 and patient == correct_patient:
+        correct = (
+            calories_from_protein == 56 and
+            protein_pct == 28 and
+            classify_high == "High/excellent source of protein" and
+            second_pct == 12 and
+            classify_good == "Good source of protein"
+        )
+        if correct:
             success_letter(idx)
             time.sleep(1.2)
             complete_room(idx)
         else:
             register_wrong(idx)
-            st.error("The iron file does not match the patient's life stage. Recheck the chart and the purpose of Daily Values.")
+            st.error(
+                "The protein lock is still closed. Recheck the calorie calculation, %DV math, "
+                "and the difference between a good source and a high source."
+            )
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
